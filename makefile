@@ -15,7 +15,7 @@ BLD_FULL_NAME = $(BLD_NAME)_v$(BLD_VERSION)_$(BLD_TYPE)_$(BLD_PLATFORM)$(BLD_FOR
 
 all: main
 
-MAIN_OBJECTS = main.o argparser.o logger.o debug.o
+MAIN_OBJECTS = main.o argparser.o logger.o debug.o ll_stack.o
 main: $(MAIN_OBJECTS)
 	mkdir -p $(BLD_FOLDER)
 	$(CC) $(MAIN_OBJECTS) -o $(BLD_FOLDER)/$(BLD_FULL_NAME)
@@ -34,6 +34,9 @@ logger.o:
 
 debug.o:
 	$(CC) $(CFLAGS) lib/util/dbg/debug.cpp
+
+ll_stack.o:
+	$(CC) $(CFLAGS) lib/ll_stack.cpp
 
 clean:
 	rm -rf *.o

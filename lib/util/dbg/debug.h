@@ -19,6 +19,8 @@
 
 #include "logger.h"
 
+typedef unsigned long long hash_t;
+
 /**
  * @brief List of error types to put into errno.
  */
@@ -55,9 +57,27 @@ do {                                                                            
 void log_end_program();
 
 /**
+ * @brief Check if pointer is readable.
+ * 
+ * @param ptr pointer to check
+ * @return true if pointer is valid, 
+ * @return false otherwise
+ */
+bool check_ptr(const void* ptr);
+
+/**
  * @brief End program if errno is not zero.
  * 
  */
 #define _ABORT_ON_ERRNO_() _LOG_FAIL_CHECK_(!errno, "FATAL ERROR", ABSOLUTE_IMPORTANCE, exit(EXIT_FAILURE);, NULL, 0);
+
+/**
+ * @brief Calculate hash value of the buffer.
+ * 
+ * @param start pointer to the start of the buffer
+ * @param end pointer to the end of the buffer
+ * @return hash_t 
+ */
+hash_t get_hash(const void* start, const void* end);
 
 #endif

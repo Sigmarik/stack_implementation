@@ -21,12 +21,14 @@
 
 void stack_init(Stack* const stack, const size_t size, int* const err_code) {
     stack_report_t status = stack_status(stack);
-    _LOG_FAIL_CHECK_(!(status & ~(STACK_NULL_CONTENT)), "error", ERROR_REPORTS, return, err_code, EINVAL);
+    _LOG_FAIL_CHECK_(!(status & ~(STACK_NULL_CONTENT|STACK_HASH_FAILURE)), "error", ERROR_REPORTS, return, err_code, EINVAL);
 
     stack->buffer = _stack_alloc_space(size, err_code);
     _LOG_FAIL_CHECK_(stack->buffer, "error", ERROR_REPORTS, return, err_code, ENOMEM);
     
     stack->capacity = size;
+
+    ON_HASH(stack->_hash = _stack_hash(stack));
 }
 
 void stack_destroy(Stack* const stack, int* const err_code) {
@@ -37,6 +39,8 @@ void stack_destroy(Stack* const stack, int* const err_code) {
 
     stack->size = 0;
     stack->capacity = 0;
+
+    ON_HASH(stack->_hash = 0);
 }
 
 void stack_push(Stack* const stack, const stack_content_t value, int* const err_code) {
@@ -49,6 +53,8 @@ void stack_push(Stack* const stack, const stack_content_t value, int* const err_
     _stack_content(stack)[stack->size] = value;
 
     ++stack->size;
+
+    ON_HASH(stack->_hash = _stack_hash(stack));
 }
 
 void stack_pop(Stack* const stack, int* const err_code) {
@@ -61,6 +67,8 @@ void stack_pop(Stack* const stack, int* const err_code) {
     if (stack->size * STACK_BUFFER_INCREASE * STACK_BUFFER_INCREASE < stack->capacity) {
         _stack_change_size(stack, stack->capacity / STACK_BUFFER_INCREASE, err_code);
     }
+
+    ON_HASH(stack->_hash = _stack_hash(stack));
 }
 
 stack_content_t stack_get(Stack* const stack, int* const err_code) {
@@ -71,20 +79,24 @@ stack_content_t stack_get(Stack* const stack, int* const err_code) {
 stack_report_t stack_status(const Stack* const stack) {
     stack_report_t status = 0;
 
-    if (stack == NULL) return STACK_NULL;
+    if (check_ptr(stack) == false) return STACK_NULL;
 
-    if (stack->size > stack->capacity) status |= STACK_BIG_SIZE;
+    ON_CANARY(if (stack->size > stack->capacity) status |= STACK_BIG_SIZE);
 
-    if (stack->buffer == NULL) status |= STACK_NULL_CONTENT;
+    if (check_ptr(stack->buffer) == false) status |= STACK_NULL_CONTENT;
 
-    if (!stack_check_canary(stack->_canary_left))  status |= STACK_L_CANARY_FAIL;
-    if (!stack_check_canary(stack->_canary_right)) status |= STACK_R_CANARY_FAIL;
+    ON_CANARY({
+        if (!stack_check_canary(stack->_canary_left))  status |= STACK_L_CANARY_FAIL;
+        if (!stack_check_canary(stack->_canary_right)) status |= STACK_R_CANARY_FAIL;
 
-    if (stack->buffer && !stack_check_canary(stack->buffer))
-        status |= STACK_BL_CANARY_FAIL;
-    if (stack->buffer && !stack_check_canary((char*)(_stack_content(stack) + stack->capacity)))
-        status |= STACK_BR_CANARY_FAIL;
-        
+        if (check_ptr(stack->buffer) && !stack_check_canary(stack->buffer))
+            status |= STACK_BL_CANARY_FAIL;
+        if (check_ptr(stack->buffer) && !stack_check_canary((char*)(_stack_content(stack) + stack->capacity)))
+            status |= STACK_BR_CANARY_FAIL;
+    })
+
+    ON_HASH(if (stack->_hash != _stack_hash(stack)) status |= STACK_HASH_FAILURE);
+
     return status;
 }
 
@@ -104,10 +116,10 @@ void _stack_dump(Stack* const stack, int importance, const char* function, const
     }
 
     _log_printf(importance, "dump", "\tStack at %p:\n", stack);
-    if (stack == NULL) return;
+    if (check_ptr(stack) == false) return;
 
-    _log_printf(importance, "dump", "\t\tLeft canary  = \"%6s\"\n", stack->_canary_left);
-    _log_printf(importance, "dump", "\t\tRight canary = \"%6s\"\n", stack->_canary_right);
+    ON_CANARY(_log_printf(importance, "dump", "\t\tLeft canary  = \"%6s\"\n", stack->_canary_left));
+    ON_CANARY(_log_printf(importance, "dump", "\t\tRight canary = \"%6s\"\n", stack->_canary_right));
     _log_printf(importance, "dump", "\t\tCapacity     = %ld\n", stack->capacity);
     _log_printf(importance, "dump", "\t\tSize         = %ld\n", stack->size);
     _log_printf(importance, "dump", "\t\tBuffer       = %p\n", stack->buffer);
@@ -139,6 +151,8 @@ void _stack_dump(Stack* const stack, int importance, const char* function, const
 
     _log_printf(importance, "dump", "\t\t\t[####] = \"%6s\"\n", 
                 (char*)(_stack_content(stack) + stack->capacity));
+    ON_HASH(_log_printf(importance, "dump", "\t\tHash      = %ld\n", stack->_hash));
+    ON_HASH(_log_printf(importance, "dump", "\t\tEst. hash = %ld\n", _stack_hash(stack)));
 }
 
 void _stack_change_size(Stack* const stack, const size_t new_size, int* const err_code) {
@@ -152,6 +166,8 @@ void _stack_change_size(Stack* const stack, const size_t new_size, int* const er
     free(stack->buffer);
     stack->buffer = new_buffer;
     stack->capacity = new_size;
+
+    ON_HASH(stack->_hash = _stack_hash(stack));
 }
 
 char* _stack_alloc_space(const size_t count, int* const err_code) {
@@ -178,6 +194,18 @@ stack_content_t* _stack_content(const Stack* const stack) {
     size_t prefix_size = sizeof(stack_canary_t) + 
         (alignof(stack_content_t) - sizeof(stack_canary_t) % alignof(stack_content_t)) % sizeof(stack_content_t);
     return (stack_content_t*)(stack->buffer + prefix_size);
+}
+
+stack_hash_t _stack_hash(const Stack* const stack) {
+    const char* stack_end = (const char*)(&stack->capacity + 1);
+    ON_CANARY(stack_end -= alignof(stack_canary_t));
+    ON_HASH(stack_end -= alignof(stack_hash_t));
+    hash_t hash = get_hash(stack, stack_end);
+    if (check_ptr(stack->buffer)) {
+        hash += get_hash(stack->buffer, (char*)(_stack_content(stack) + stack->capacity) + 
+                                        ((char*)_stack_content(stack) - stack->buffer));
+    }
+    return hash;
 }
 
 #endif

@@ -21,44 +21,50 @@ static const stack_content_t ___STACK_CONTENT_OR_POISON_IS_NOT_DEFINED___ = STAC
 //*   #include "stackworks.h"
 
 #include <stdalign.h>
+#include <fcntl.h>
 #include "util/dbg/debug.h"
 #include "util/dbg/logger.h"
+#include "stackreports.h"
 
-typedef int stack_report_t;
-enum STACK_STATUSES {
-    STACK_NULL = 1 << 0,
-    STACK_BIG_SIZE = 1 << 1,
-    STACK_NULL_CONTENT = 1 << 2,
-    STACK_L_CANARY_FAIL = 1 << 3,
-    STACK_R_CANARY_FAIL = 1 << 4,
-    STACK_BL_CANARY_FAIL = 1 << 5,
-    STACK_BR_CANARY_FAIL = 1 << 6,
-};
+#ifndef NCANARY
+#define ON_CANARY(...) __VA_ARGS__
+#else
+#define ON_CANARY(...)
+#endif
+
+#ifndef NHASH
+#define ON_HASH(...) __VA_ARGS__
+#else
+#define ON_HASH(...)
+#endif
 
 // TODO: Make a separate structure for stack statuses.
 static const char* const STACK_STATUS_DESCR[] = {
-    "Stack is NULL.",
+    "Stack pointer is invalid.",
     "Stack size is bigger than its capacity.",
     "Stack has no buffer.",
     "Stack left canary is corrupt.",
     "Stack right canary is corrupt.",
     "Stack buffer left canary is corrupt.",
-    "Stack buffer right canary is corrupt."
+    "Stack buffer right canary is corrupt.",
+    "Stack hash was wrong."
 };
 
 #define STACK_CANARY_VALUE "CANARY"
 typedef char stack_canary_t[7];
+typedef hash_t stack_hash_t;
 
 static const size_t STACK_BUFFER_INCREASE = 2;
 
 struct Stack {
-    stack_canary_t _canary_left = STACK_CANARY_VALUE;
+    ON_CANARY(stack_canary_t _canary_left = STACK_CANARY_VALUE;)
 
     char* buffer = NULL;
-    size_t size = 0;
-    size_t capacity = 0;
+    uintptr_t size = 0;
+    uintptr_t capacity = 0;
 
-    stack_canary_t _canary_right = STACK_CANARY_VALUE;
+    ON_HASH(stack_hash_t _hash = 0;)
+    ON_CANARY(stack_canary_t _canary_right = STACK_CANARY_VALUE;)
 };
 
 /**
@@ -162,5 +168,13 @@ char* _stack_alloc_space(const size_t count, int* const err_code = NULL);
  * @return stack_content_t* 
  */
 stack_content_t* _stack_content(const Stack* const stack);
+
+/**
+ * @brief Calculate stack hash.
+ * 
+ * @param stack 
+ * @return stack_hash_t 
+ */
+stack_hash_t _stack_hash(const Stack* const  stack);
 
 #endif

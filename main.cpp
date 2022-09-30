@@ -13,14 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <clocale>
+#include <ctype.h>
 
 #include "lib/util/dbg/debug.h"
 #include "lib/util/argparser.h"
 
-typedef long long stack_content_t;
-stack_content_t STACK_CONTENT_POISON = 0xDEADBABEC0FEBEEF;
-
-#include "lib/stackworks.h"
+#include "lib/ll_stack.h"
 
 /**
  * @brief Print a bunch of owls.
@@ -44,7 +42,7 @@ void print_label();
  * @param variable pointer to the variable to push the result
  * @param err_code variable to fill with error code
  */
-void read_ld(const char* prefix, stack_content_t* variable, int* err_code = NULL);
+void read_ld(const char* prefix, ll_stack_content_t* variable, int* err_code = NULL);
 
 /**
  * @brief Print prefix and read one-character command.
@@ -68,9 +66,10 @@ void print_commands();
  * @param command one-char user input
  * @param err_code variable to fill with error code
  */
-void execute_user_command(Stack* const stack, bool* const runtime_status, const char command, int* const err_code = NULL);
+void execute_user_command(LLStack stack, bool* const runtime_status, const char command, int* const err_code = NULL);
 
-static int log_threshold = WARNINGS;
+// Ignore everything less or equaly important as status reports.
+static int log_threshold = STATUS_REPORTS + 1;
 
 static const int NUMBER_OF_OWLS = 10;
 
@@ -110,11 +109,10 @@ int main(const int argc, const char** argv) {
     strcat(request_prefix, "# ");
 
     log_printf(STATUS_REPORTS, "status", "Creating stack...\n");
-    Stack stack;
-    stack_init(&stack, 4, &errno);
-    if (stack_status(&stack)) {
+    LLStack stack = ll_stack_ctor(4, &errno);
+    if (ll_stack_status(stack)) {
         log_printf(ERROR_REPORTS, "error", "Stack is invalid after initialization, terminating.\n");
-        stack_dump(&stack, ERROR_REPORTS);
+        ll_stack_dump(stack, ERROR_REPORTS);
         return EXIT_FAILURE;
     }
     log_printf(STATUS_REPORTS, "status", "Stack initialized, entering main loop...\n");
@@ -124,20 +122,22 @@ int main(const int argc, const char** argv) {
     bool program_alive = true;
     while (program_alive) {
 
-        execute_user_command(&stack, &program_alive, read_command(request_prefix, "HQPRGD"), &errno);
+        execute_user_command(stack, &program_alive, read_command(request_prefix, "HQPRGD"), &errno);
 
-        _LOG_FAIL_CHECK_(!stack_status(&stack), "ERROR", ERROR_REPORTS, {
+        log_printf(STATUS_REPORTS, "status", "Stack status check started...\n");
+
+        _LOG_FAIL_CHECK_(ll_stack_status(stack) == 0, "ERROR", ERROR_REPORTS, {
             puts("Stack failed, terminating.");
             log_printf(ERROR_REPORTS, "error", "Stack failed, terminating.\n");
-            stack_dump(&stack, ERROR_REPORTS);
+            ll_stack_dump(stack, ERROR_REPORTS);
             return EXIT_FAILURE;
         }, &errno, EINVAL);
 
         log_printf(STATUS_REPORTS, "status", "Tick ended successfully.\n");
-        stack_dump(&stack, STATUS_REPORTS);
+        ll_stack_dump(stack, STATUS_REPORTS);
     }
 
-    stack_destroy(&stack);
+    ll_stack_dtor(stack);
 
     return EXIT_SUCCESS;
 }
@@ -163,7 +163,7 @@ void print_label() {
     log_printf(ABSOLUTE_IMPORTANCE, "build info", "Build from %s %s.\n", __DATE__, __TIME__);
 }
 
-void read_ld(const char* prefix, stack_content_t* variable, int* err_code) {
+void read_ld(const char* prefix, ll_stack_content_t* variable, int* err_code) {
     _LOG_FAIL_CHECK_(prefix && variable, "warning", WARNINGS, return;, err_code, EFAULT);
 
     printf("%s", prefix);
@@ -209,10 +209,10 @@ void print_commands() {
             "D - dump stack information to logs\n");
 }
 
-void execute_user_command(Stack* const stack, bool* const runtime_status, const char command, int* const err_code) {
+void execute_user_command(LLStack stack, bool* const runtime_status, const char command, int* const err_code) {
     log_printf(STATUS_REPORTS, "status", "Processing command %c.\n", command);
 
-    stack_content_t argument = 0;
+    ll_stack_content_t argument = 0;
     switch (command) {
         case 'H': { print_commands(); break; }
 
@@ -221,27 +221,28 @@ void execute_user_command(Stack* const stack, bool* const runtime_status, const 
         case 'P':
             read_ld("Value to push to the stack -> ", &argument);
             log_printf(STATUS_REPORTS, "status", "Command argument = %ld.\n", argument);
-            stack_push(stack, argument, &errno);
+            ll_stack_push(stack, argument, &errno);
             break;
 
         case 'R':
-            if (stack->size == 0) {
+            if (ll_stack_size(stack) == 0) {
                 printf("Stack is empty.\n");
                 break;
             }
-            stack_pop(stack, &errno);
+            ll_stack_pop(stack, &errno);
             break;
 
         case 'G':
-            if (stack->size == 0) {
+            if (ll_stack_size(stack) == 0) {
                 printf("Stack is empty.\n");
                 break;
             }
-            printf("Last element of the stack -> %ld.\n", (long int)stack_get(stack, &errno));
+            printf("Last element of the stack -> %ld.\n", (long int)ll_stack_pull(stack, &errno));
             break;
 
         case 'D':
-            stack_dump(stack, ABSOLUTE_IMPORTANCE);
+            log_printf(ABSOLUTE_IMPORTANCE, "dump", "Stack encrypted address: %p\n", stack);
+            ll_stack_dump(stack, ABSOLUTE_IMPORTANCE);
             printf("Stack was dumped into logs.\n");
             break;
 

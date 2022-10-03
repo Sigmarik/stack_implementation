@@ -13,6 +13,7 @@ void log_end_program() {
 }
 
 bool check_ptr(const void* ptr) {
+    if (ptr == NULL) return false;
     int mem_errno = errno;
     int fd = open("/dev/null", O_WRONLY);
     ssize_t result = write(fd, ptr, 1);

@@ -16,8 +16,6 @@ int parse_lines(FILE* file, char** *text, char* *buffer, int* error_code) {
 
     int line_count = 1;
 
-    setvbuf(file, NULL, _IOFBF, file_size * sizeof(**buffer));
-
     *buffer = (char*)calloc(file_size + 1, sizeof(**buffer));
     _LOG_FAIL_CHECK_(*buffer, "error", ERROR_REPORTS, return 0, error_code, ENOMEM);
 
@@ -35,7 +33,7 @@ int parse_lines(FILE* file, char** *text, char* *buffer, int* error_code) {
     (*text)[0] = *buffer;
     int line_id = 0;
     for (int char_id = 0; char_id < file_size; char_id++) {
-        if ((*buffer)[char_id] == (wchar_t)'\0') {
+        if ((*buffer)[char_id] == '\0') {
             (*buffer)[char_id] = 0;
             (*text)[++line_id] = (*buffer) + char_id + 1;
         }

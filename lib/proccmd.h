@@ -12,6 +12,8 @@
 #ifndef PROC_CMD_H
 #define PROC_CMD_H
 
+#include "util/dbg/debug.h"
+
 enum CMD_LIST {
     CMD_END,        //* End program.
     CMD_PUSH,       //* Push element to the stack.
@@ -24,5 +26,39 @@ enum CMD_LIST {
     CMD_DUP,        //* Push copy of last element to the stack.
     CMD_ABORT,      //* Abort program execution.
 };
+
+//* Command as they should be written in source file.
+static const char* CMD_SOURCE[] = {
+    "END",
+    "PUSH",
+    "POP",
+    "OUT",
+    "ADD",
+    "SUB",
+    "MUL",
+    "DIV",
+    "DUP",
+    "ABORT",
+};
+
+//* Command hashes.
+static hash_t CMD_HASHES[sizeof(CMD_SOURCE) / sizeof(*CMD_SOURCE)];
+
+/**
+ * @brief [DO NOT CALL] Recalculate CMD_HASHES.
+ * 
+ * @return int 
+ */
+static int __cmd_calc_hashes();
+
+static int __cmd_hash_calculator = __cmd_calc_hashes();
+
+static int __cmd_calc_hashes() {
+    for (int cmd_id = 0; cmd_id < (char)(sizeof(CMD_SOURCE) / sizeof(*CMD_SOURCE)); ++cmd_id) {
+        const char* command = CMD_SOURCE[cmd_id];
+        CMD_HASHES[cmd_id] = get_hash(command, command + strlen(command) - 1);
+    }
+    return 0;
+}
 
 #endif

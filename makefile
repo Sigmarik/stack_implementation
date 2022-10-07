@@ -5,38 +5,63 @@ CFLAGS = -c -Wall
 BLD_FOLDER = build
 TEST_FOLDER = test
 
-BLD_NAME = build
-BLD_VERSION = 0.1
-BLD_PLATFORM = linux
-BLD_TYPE = dev
-BLD_FORMAT = .out
+PROC_BLD_NAME = processor
+PROC_BLD_VERSION = 0.1
+PROC_BLD_PLATFORM = linux
+PROC_BLD_TYPE = dev
+PROC_BLD_FORMAT = .out
 
-BLD_FULL_NAME = $(BLD_NAME)_v$(BLD_VERSION)_$(BLD_TYPE)_$(BLD_PLATFORM)$(BLD_FORMAT)
+ASM_BLD_NAME = assembler
+ASM_BLD_VERSION = 0.1
+ASM_BLD_PLATFORM = linux
+ASM_BLD_TYPE = dev
+ASM_BLD_FORMAT = .out
 
-all: main
+DASM_BLD_NAME = disassembler
+DASM_BLD_VERSION = 0.1
+DASM_BLD_PLATFORM = linux
+DASM_BLD_TYPE = dev
+DASM_BLD_FORMAT = .out
 
-MAIN_OBJECTS = main.o argparser.o logger.o debug.o ll_stack.o
-main: $(MAIN_OBJECTS)
+PROC_BLD_FULL_NAME = $(PROC_BLD_NAME)_v$(PROC_BLD_VERSION)_$(PROC_BLD_TYPE)_$(PROC_BLD_PLATFORM)$(PROC_BLD_FORMAT)
+ASM_BLD_FULL_NAME = $(ASM_BLD_NAME)_v$(ASM_BLD_VERSION)_$(ASM_BLD_TYPE)_$(ASM_BLD_PLATFORM)$(ASM_BLD_FORMAT)
+DASM_BLD_FULL_NAME = $(DASM_BLD_NAME)_v$(DASM_BLD_VERSION)_$(DASM_BLD_TYPE)_$(DASM_BLD_PLATFORM)$(DASM_BLD_FORMAT)
+
+all: assembler processor
+
+ASSEMBLER_OBJECTS = assembler.o argparser.o logger.o debug.o file_proc.o
+assembler: $(ASSEMBLER_OBJECTS)
 	mkdir -p $(BLD_FOLDER)
-	$(CC) $(MAIN_OBJECTS) -o $(BLD_FOLDER)/$(BLD_FULL_NAME)
+	$(CC) $(ASSEMBLER_OBJECTS) -o $(BLD_FOLDER)/$(ASM_BLD_FULL_NAME)
+
+PROCESSOR_OBJECTS = processor.o argparser.o logger.o debug.o file_proc.o
+processor: $(PROCESSOR_OBJECTS)
+	mkdir -p $(BLD_FOLDER)
+	$(CC) $(PROCESSOR_OBJECTS) -o $(BLD_FOLDER)/$(PROC_BLD_FULL_NAME)
+
+asm:
+	cd $(BLD_FOLDER) && exec ./$(ASM_BLD_FULL_NAME) $(ARGS)
 
 run:
-	cd $(BLD_FOLDER) && exec ./$(BLD_FULL_NAME) $(ARGS)
+	cd $(BLD_FOLDER) && exec ./$(PROC_BLD_FULL_NAME) $(ARGS)
 
-main.o:
-	$(CC) $(CFLAGS) main.cpp
+assembler.o:
+	$(CC) $(CFLAGS) -c assembler.cpp
+
+processor.o:
+	$(CC) $(CFLAGS) -c processor.cpp
+
+file_proc.o:
+	$(CC) $(CFLAGS) -c lib/file_proc.cpp
 
 argparser.o:
-	$(CC) $(CFLAGS) lib/util/argparser.cpp
+	$(CC) $(CFLAGS) -c lib/util/argparser.cpp
 
 logger.o:
-	$(CC) $(CFLAGS) lib/util/dbg/logger.cpp
+	$(CC) $(CFLAGS) -c lib/util/dbg/logger.cpp
 
 debug.o:
-	$(CC) $(CFLAGS) lib/util/dbg/debug.cpp
-
-ll_stack.o:
-	$(CC) $(CFLAGS) lib/ll_stack.cpp
+	$(CC) $(CFLAGS) -c lib/util/dbg/debug.cpp
 
 clean:
 	rm -rf *.o

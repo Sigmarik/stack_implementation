@@ -20,8 +20,8 @@
 #include "lib/util/dbg/debug.h"
 #include "lib/util/argparser.h"
 #include "lib/file_proc.h"
-#include "lib/processor/procinfo.h"
-#include "lib/processor/proccmd.h"
+#include "lib/procinfo.h"
+#include "lib/proccmd.h"
 
 typedef long long stack_content_t;
 stack_content_t STACK_CONTENT_POISON = 0xDEADBABEC0FEBEEF;
@@ -114,6 +114,7 @@ int main(const int argc, const char** argv) {
         return EXIT_FAILURE;
     }, NULL, 0);
 
+    log_printf(STATUS_REPORTS, "status", "Opening file %s.\n", file_name);
     int fd = open(file_name, O_RDONLY);
     _LOG_FAIL_CHECK_(fd != -1, "error", ERROR_REPORTS, {
         printf("File was not opened, terminating...\n");
@@ -121,25 +122,35 @@ int main(const int argc, const char** argv) {
     }, NULL, 0);
     size_t size = flength(fd);
 
+    log_printf(STATUS_REPORTS, "status", "Reading file content...\n");
     char* content = (char*) calloc(size, sizeof(*content));
     read(fd, content, size);
     close(fd);
 
     char* pointer = content;
 
+    log_printf(STATUS_REPORTS, "status", "Initializing stack...\n");
     Stack stack = {};
     stack_init(&stack, STACK_START_SIZE, &errno);
+    _LOG_FAIL_CHECK_(!stack_status(&stack), "error", ERROR_REPORTS, {
+        log_printf(ERROR_REPORTS, "error", "Failed to initialize stack.\n");
+        stack_dump(&stack, ERROR_REPORTS);
+    }, NULL, 0);
     
+    log_printf(STATUS_REPORTS, "status", "Reading file header...\n");
     int prefix_shift = read_header(pointer, &errno);
     pointer += prefix_shift;
     _LOG_FAIL_CHECK_(prefix_shift, "error", ERROR_REPORTS, { free(content); return EXIT_FAILURE; }, NULL, 0);
 
+    log_printf(STATUS_REPORTS, "status", "Starting executing commands...\n");
     size_t delta = 0;
-    while ((delta = execute_command(pointer, &stack, &errno)) > 0) {
+    while ((delta = execute_command(pointer, &stack, &errno)) != 0) {
         pointer += delta;
     }
 
+    log_printf(STATUS_REPORTS, "status", "Execution finished, cleaning allocated memory...\n");
     free(content);
+    stack_destroy(&stack, &errno);
 
     if (errno) return EXIT_FAILURE;
     return EXIT_SUCCESS;
@@ -168,11 +179,12 @@ void print_label() {
 
 size_t read_header(char* ptr, int* err_code) {
     _LOG_FAIL_CHECK_(ptr, "error", ERROR_REPORTS, return 0, err_code, EFAULT);
-    _LOG_FAIL_CHECK_(strncmp(FILE_PREFIX, ptr, PREFIX_SIZE), "error", ERROR_REPORTS, {
-        log_printf(ERROR_REPORTS, "error", "Wrong file prefix, terminating.\n");
+    _LOG_FAIL_CHECK_(strncmp(FILE_PREFIX, ptr, PREFIX_SIZE) == 0, "error", ERROR_REPORTS, {
+        log_printf(ERROR_REPORTS, "error", "Wrong file prefix, terminating. Prefix - \"%*s\", expected prefix - \"%*s\"\n",
+                                            PREFIX_SIZE, ptr, PREFIX_SIZE, FILE_PREFIX);
         return 0;
     }, err_code, EIO);
-    _LOG_FAIL_CHECK_(*(version_t*)(ptr+4) > PROC_VERSION, "error", ERROR_REPORTS, {
+    _LOG_FAIL_CHECK_(*(version_t*)(ptr+4) <= PROC_VERSION, "error", ERROR_REPORTS, {
         log_printf(ERROR_REPORTS, "error", "Wrong file version, terminating. File version - %d, processor version - %d.\n",
                                                                             *(version_t*)(ptr+4), PROC_VERSION);
         return 0;
@@ -183,26 +195,32 @@ size_t read_header(char* ptr, int* err_code) {
 #define _LOG_EMPT_STACK_(command) do {                                                      \
     _LOG_FAIL_CHECK_(stack->size, "error", ERROR_REPORTS, {                                 \
         log_printf(ERROR_REPORTS, "error", "Request to the empty stack in " command ".\n"); \
-        shift = -1;                                                                         \
+        shift = 0;                                                                          \
         break;                                                                              \
     }, err_code, EFAULT);                                                                   \
 } while (0)
 
 size_t execute_command(const char* ptr, Stack* const stack, int* const err_code) {
-    _LOG_FAIL_CHECK_(ptr, "error", ERROR_REPORTS, return, err_code, EFAULT);
+    _LOG_FAIL_CHECK_(ptr, "error", ERROR_REPORTS, return 0, err_code, EFAULT);
+    log_printf(STATUS_REPORTS, "status", "Executing command 0x%0X.\n", *ptr);
+    _LOG_FAIL_CHECK_(stack_status(stack) == 0, "error", ERROR_REPORTS, {
+        log_printf(ERROR_REPORTS, "error", "Stack status check failed.\n");
+        stack_dump(stack, ERROR_REPORTS);
+        return 0;
+    }, NULL, 0);
     int var_a = 0, var_b = 0;
     int shift = 1;
     switch (*ptr) {
         case CMD_END: 
-            shift = -1;
+            shift = 0;
         break;
         case CMD_ABORT:
-            shift = -1;
+            shift = 0;
             if (err_code) *err_code = EAGAIN;
         break;
         case CMD_PUSH:
             shift = sizeof(int) + 1;
-            stack_push(stack, *(int*)(*ptr + 1), err_code);
+            stack_push(stack, *(int*)(ptr + 1), err_code);
         break;
         case CMD_POP:
             _LOG_EMPT_STACK_("POP");
@@ -210,7 +228,7 @@ size_t execute_command(const char* ptr, Stack* const stack, int* const err_code)
         break;
         case CMD_OUT:
             _LOG_EMPT_STACK_("OUT");
-            printf(">>> %ld\n", *(int*)(*ptr + 1));
+            printf(">>> %lld\n", stack_get(stack));
         break;
         case CMD_ADD:
             _LOG_EMPT_STACK_("ADD[top]");
@@ -242,13 +260,13 @@ size_t execute_command(const char* ptr, Stack* const stack, int* const err_code)
         break;
         case CMD_DUP:
             _LOG_EMPT_STACK_("DUP");
-            int var_a = stack_get(stack, err_code);
+            var_a = stack_get(stack, err_code);
             stack_push(stack, var_a, err_code);
         break;
         default:
             log_printf(ERROR_REPORTS, "error", "Unknown command 0x%0X. Terminating.\n", *ptr);
             if (err_code) *err_code = EIO;
-           shift = -1;
+            shift = 0;
         break;
     }
     return shift;

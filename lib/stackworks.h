@@ -61,12 +61,12 @@ void stack_pop(Stack* const stack, int* const err_code) {
     _LOG_FAIL_CHECK_(!stack_status(stack), "error", ERROR_REPORTS, return, err_code, EINVAL);
     _LOG_FAIL_CHECK_(stack->size, "error", ERROR_REPORTS, return, err_code, ENXIO);
 
-    _stack_content(stack)[stack->size - 1] = STACK_CONTENT_POISON;
-    --stack->size;
-
-    if (stack->size * STACK_BUFFER_INCREASE * STACK_BUFFER_INCREASE < stack->capacity) {
+    if ((stack->size - 1) * STACK_BUFFER_INCREASE * STACK_BUFFER_INCREASE < stack->capacity) {
         _stack_change_size(stack, stack->capacity / STACK_BUFFER_INCREASE, err_code);
     }
+
+    _stack_content(stack)[stack->size - 1] = STACK_CONTENT_POISON;
+    --stack->size;
 
     ON_HASH(stack->_hash = _stack_hash(stack));
 }
@@ -161,7 +161,8 @@ void _stack_change_size(Stack* const stack, const size_t new_size, int* const er
     char* new_buffer = _stack_alloc_space(new_size, err_code);
     _LOG_FAIL_CHECK_(new_buffer, "error", ERROR_REPORTS, return, err_code, ENOMEM);
 
-    memcpy(new_buffer, stack->buffer, stack->capacity * sizeof(stack_content_t) + ((char*)_stack_content(stack) - stack->buffer));
+    size_t copy_size = new_size < stack->capacity ? new_size : stack->capacity;
+    memcpy(new_buffer, stack->buffer, copy_size * sizeof(stack_content_t) + ((char*)_stack_content(stack) - stack->buffer));
 
     free(stack->buffer);
     stack->buffer = new_buffer;
@@ -179,7 +180,7 @@ char* _stack_alloc_space(const size_t count, int* const err_code) {
     char* buffer = (char*)calloc(buffer_size, sizeof(char));
     _LOG_FAIL_CHECK_(buffer, "error", ERROR_REPORTS, return NULL, err_code, ENOMEM);
 
-    strncpy(buffer,                                        STACK_CANARY_VALUE, sizeof(stack_canary_t));
+    strncpy(buffer,                             STACK_CANARY_VALUE, sizeof(stack_canary_t));
     strncpy(buffer + buffer_size - prefix_size, STACK_CANARY_VALUE, sizeof(stack_canary_t));
 
     stack_content_t* beginning = (stack_content_t*)(buffer + prefix_size);

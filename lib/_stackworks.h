@@ -22,7 +22,6 @@ static const stack_content_t ___STACK_CONTENT_OR_POISON_IS_NOT_DEFINED___ = STAC
 
 #include <stdalign.h>
 #include <fcntl.h>
-#include <stdint.h>
 #include "util/dbg/debug.h"
 #include "util/dbg/logger.h"
 #include "stackreports.h"

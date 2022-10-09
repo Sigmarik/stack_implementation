@@ -23,8 +23,6 @@ static const long long RNG_ATTEMPT_LIMIT = 10000;
 
         _LOG_FAIL_CHECK_(attempt_cnt < RNG_ATTEMPT_LIMIT, "error", ERROR_REPORTS, return key, err_code, errno);
 
-        printf("Stack security key: %ld.\n", key);
-
         return key;
     }
 

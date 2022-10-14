@@ -47,7 +47,7 @@ void stack_push(Stack* const stack, const stack_content_t value, int* const err_
     _LOG_FAIL_CHECK_(!stack_status(stack), "error", ERROR_REPORTS, return, err_code, EINVAL);
 
     if (stack->capacity < stack->size + 1) {
-        _stack_change_size(stack, stack->capacity * STACK_BUFFER_INCREASE, err_code);
+        _stack_change_size(stack, stack->capacity * STACK_BUFFER_INCREASE + 1, err_code);
     }
 
     _stack_content(stack)[stack->size] = value;
@@ -62,7 +62,7 @@ void stack_pop(Stack* const stack, int* const err_code) {
     _LOG_FAIL_CHECK_(stack->size, "error", ERROR_REPORTS, return, err_code, ENXIO);
 
     if (stack->size * STACK_BUFFER_INCREASE * STACK_BUFFER_INCREASE < stack->capacity) {
-        _stack_change_size(stack, stack->capacity / STACK_BUFFER_INCREASE, err_code);
+        _stack_change_size(stack, stack->capacity / STACK_BUFFER_INCREASE + 1, err_code);
     }
 
     _stack_content(stack)[stack->size - 1] = STACK_CONTENT_POISON;

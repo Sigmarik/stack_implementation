@@ -29,6 +29,12 @@ void stack_init(Stack* const stack, const size_t size, int* const err_code) {
     stack->capacity = size;
 
     ON_HASH(stack->_hash = _stack_hash(stack));
+
+    _LOG_FAIL_CHECK_(!stack_status(stack), "error", ERROR_REPORTS, {
+        log_printf(ERROR_REPORTS, "error", "Stack %p was invalid after initialization.\n", stack);
+        stack_dump(stack, ERROR_REPORTS);
+        return;
+    }, err_code, EAGAIN);
 }
 
 void stack_destroy(Stack* const stack, int* const err_code) {
@@ -55,6 +61,12 @@ void stack_push(Stack* const stack, const stack_content_t value, int* const err_
     ++stack->size;
 
     ON_HASH(stack->_hash = _stack_hash(stack));
+
+    _LOG_FAIL_CHECK_(!stack_status(stack), "error", ERROR_REPORTS, {
+        log_printf(ERROR_REPORTS, "error", "Stack %p was invalid after push.\n", stack);
+        stack_dump(stack, ERROR_REPORTS);
+        return;
+    }, err_code, EAGAIN);
 }
 
 void stack_pop(Stack* const stack, int* const err_code) {
@@ -69,6 +81,12 @@ void stack_pop(Stack* const stack, int* const err_code) {
     --stack->size;
 
     ON_HASH(stack->_hash = _stack_hash(stack));
+
+    _LOG_FAIL_CHECK_(!stack_status(stack), "error", ERROR_REPORTS, {
+        log_printf(ERROR_REPORTS, "error", "Stack %p was invalid after pop.\n", stack);
+        stack_dump(stack, ERROR_REPORTS);
+        return;
+    }, err_code, EAGAIN);
 }
 
 stack_content_t stack_get(Stack* const stack, int* const err_code) {
@@ -169,6 +187,13 @@ void _stack_change_size(Stack* const stack, const size_t new_size, int* const er
     stack->capacity = new_size;
 
     ON_HASH(stack->_hash = _stack_hash(stack));
+
+    
+    _LOG_FAIL_CHECK_(!stack_status(stack), "error", ERROR_REPORTS, {
+        log_printf(ERROR_REPORTS, "error", "Stack %p was invalid after size change.\n", stack);
+        stack_dump(stack, ERROR_REPORTS);
+        return;
+    }, err_code, EAGAIN);
 }
 
 char* _stack_alloc_space(const size_t count, int* const err_code) {
